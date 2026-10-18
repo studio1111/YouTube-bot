@@ -1,0 +1,39 @@
+{
+  "channel": {
+    "niche": "science and technology explainers",
+    "language": "en",
+    "long_form_per_week": 2,
+    "shorts_per_week": 5
+  },
+  "funnel": {
+    "lead_magnet": "source-pack",
+    "first_product": {
+      "name": "visual explainer pack",
+      "price_usd": 15
+    },
+    "membership_price_usd": 6
+  },
+  "phase_0_validation": {
+    "months": "0-2",
+    "email_waitlist_target": 500,
+    "revenue_target_usd_per_month": [0, 100]
+  },
+  "phase_2_base_case": {
+    "months": "6-12",
+    "streams_usd_per_month": {
+      "youtube_ads_and_premium": 320,
+      "digital_product": 600,
+      "membership": 480,
+      "affiliate": 200,
+      "sponsorship": 500
+    },
+    "gross_total_usd_per_month": 2100
+  },
+  "guardrails": {
+    "human_publish_approval": true,
+    "private_upload_first": true,
+    "rights_ledger_required": true,
+    "synthetic_media_review_required": true,
+    "no_automated_engagement": true
+  }
+}
