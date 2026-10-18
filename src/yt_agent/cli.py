@@ -1,4 +1,5 @@
 import argparse
+from .ab_test import create_experiment
 from .pipeline import EpisodePipeline
 from .vertical_slice import build_video
 
@@ -13,12 +14,19 @@ def main() -> None:
     run.add_argument("--topic")
     run.add_argument("--episode-id", default="episode-001")
     run.add_argument("--runtime-dir", default="runtime")
+    ab = sub.add_parser("ab-test", help="create title and thumbnail A/B variants")
+    ab.add_argument("--topic", required=True)
+    ab.add_argument("--experiment-id", default="exp-001")
+    ab.add_argument("--runtime-dir", default="runtime")
     args = parser.parse_args()
     if args.command == "demo":
         path = EpisodePipeline().create(args.topic, args.episode_id)
         print(f"Created {path}")
     elif args.command == "run":
         path = build_video(args.topic, args.runtime_dir, args.episode_id)
+        print(f"Created {path}")
+    elif args.command == "ab-test":
+        path = create_experiment(args.topic, args.runtime_dir, args.experiment_id)
         print(f"Created {path}")
 
 
