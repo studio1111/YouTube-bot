@@ -6,10 +6,13 @@ from .ab_test import create_experiment
 from .analytics import YouTubeAnalyticsClient, date_window, snapshot_experiment
 from .autopilot import run_autopilot
 from .branding import build_brand_kit
+from .content_calendar import write_calendar
+from .idea_intelligence import build_idea_report
 from .notifications import send_alerts
 from .pipeline import EpisodePipeline
 from .publisher import prepare_publish_package
 from .qa import evaluate_episode_qa
+from .scenario_prompts import write_scenario
 from .seo import write_seo_package
 from .subtitles import write_subtitles
 from .trends import discover_trends
@@ -21,6 +24,12 @@ from .youtube_publish import YouTubePublisher, release_approval_file
 def main() -> None:
     parser = argparse.ArgumentParser(description="Autonomous local-first YouTube channel agent")
     sub = parser.add_subparsers(dest="command", required=True)
+    ideas = sub.add_parser("ideas", help="collect and rank authorized public ideas from YouTube/Instagram/TikTok")
+    ideas.add_argument("--niche", required=True); ideas.add_argument("--runtime-dir", default="runtime")
+    scenario = sub.add_parser("scenario", help="generate a structured original episode scenario with local Ollama")
+    scenario.add_argument("--idea-file", required=True); scenario.add_argument("--runtime-dir", default="runtime"); scenario.add_argument("--audience", default="curious science and technology viewers"); scenario.add_argument("--format", default="long-form")
+    calendar = sub.add_parser("calendar", help="turn an idea report into a publishing calendar")
+    calendar.add_argument("--ideas-file", required=True); calendar.add_argument("--start-date", required=True); calendar.add_argument("--runtime-dir", default="runtime"); calendar.add_argument("--weeks", type=int, default=4)
     auto = sub.add_parser("autopilot", help="run complete pipeline: trends -> branding -> video -> A/B -> QA -> publish prep")
     auto.add_argument("--niche", required=True); auto.add_argument("--channel-name", default="Deep Cosmos"); auto.add_argument("--episode-id", default="ep-auto-001"); auto.add_argument("--runtime-dir", default="runtime"); auto.add_argument("--approved-by"); auto.add_argument("--publish-at")
     demo = sub.add_parser("demo", help="create a local episode manifest"); demo.add_argument("--topic", required=True); demo.add_argument("--episode-id", default="episode-001")
@@ -37,7 +46,11 @@ def main() -> None:
     ab = sub.add_parser("ab-test", help="create title and thumbnail A/B variants"); ab.add_argument("--topic", required=True); ab.add_argument("--experiment-id", default="exp-001"); ab.add_argument("--runtime-dir", default="runtime")
     analytics = sub.add_parser("analytics", help="query Analytics and calculate a winner"); analytics.add_argument("--experiment-file", required=True); analytics.add_argument("--start-date"); analytics.add_argument("--end-date"); analytics.add_argument("--credentials-file"); analytics.add_argument("--token-file", default="runtime/youtube-token.json"); analytics.add_argument("--notify", nargs="*", choices=["telegram", "email"])
     args = parser.parse_args()
-    if args.command == "autopilot": path = run_autopilot(args.niche, channel_name=args.channel_name, episode_id=args.episode_id, runtime_dir=args.runtime_dir, approved_by=args.approved_by, publish_at=args.publish_at); print(f"Created {path}")
+    if args.command == "ideas": print(f"Created {build_idea_report(args.niche, args.runtime_dir)}")
+    elif args.command == "scenario":
+        idea=json.loads(Path(args.idea_file).read_text(encoding='utf-8')); print(f"Created {write_scenario(idea, args.runtime_dir, args.audience, args.format)}")
+    elif args.command == "calendar": print(f"Created {write_calendar(args.ideas_file, args.start_date, args.runtime_dir, args.weeks)}")
+    elif args.command == "autopilot": print(f"Created {run_autopilot(args.niche, channel_name=args.channel_name, episode_id=args.episode_id, runtime_dir=args.runtime_dir, approved_by=args.approved_by, publish_at=args.publish_at)}")
     elif args.command == "demo": print(f"Created {EpisodePipeline().create(args.topic, args.episode_id)}")
     elif args.command == "run": print(f"Created {build_video(args.topic, args.runtime_dir, args.episode_id, video_mode=args.video_mode)}")
     elif args.command == "video-modes": print(json.dumps({"free_video_modes": list(FREE_VIDEO_MODES)}, indent=2))
