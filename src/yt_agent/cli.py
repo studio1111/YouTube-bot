@@ -2,6 +2,7 @@ import argparse
 import json
 from .ab_test import create_experiment
 from .analytics import YouTubeAnalyticsClient, date_window, snapshot_experiment
+from .notifications import send_alerts
 from .pipeline import EpisodePipeline
 from .vertical_slice import build_video
 
@@ -26,6 +27,7 @@ def main() -> None:
     analytics.add_argument("--end-date")
     analytics.add_argument("--credentials-file")
     analytics.add_argument("--token-file", default="runtime/youtube-token.json")
+    analytics.add_argument("--notify", nargs="*", choices=["telegram", "email"])
     args = parser.parse_args()
     if args.command == "demo":
         path = EpisodePipeline().create(args.topic, args.episode_id)
@@ -48,3 +50,6 @@ def main() -> None:
         print(f"Updated {path}")
         for warning in result.get("warnings", []):
             print(f"ALERT: {warning}")
+        if result.get("warnings") and args.notify:
+            for channel in send_alerts(args.experiment_file, args.notify):
+                print(f"Notification sent: {channel}")
