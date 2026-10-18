@@ -14,6 +14,7 @@ from .seo import write_seo_package
 from .subtitles import write_subtitles
 from .trends import discover_trends
 from .vertical_slice import build_video
+from .video_engines import FREE_VIDEO_MODES
 
 
 def main() -> None:
@@ -32,10 +33,13 @@ def main() -> None:
     demo.add_argument("--topic", required=True)
     demo.add_argument("--episode-id", default="episode-001")
 
-    run = sub.add_parser("run", help="generate script, audio, subtitles, SEO, slides, QA, and MP4")
+    run = sub.add_parser("run", help="generate script, audio, subtitles, SEO, visuals, QA, and MP4")
     run.add_argument("--topic")
     run.add_argument("--episode-id", default="episode-001")
     run.add_argument("--runtime-dir", default="runtime")
+    run.add_argument("--video-mode", choices=list(FREE_VIDEO_MODES), default="ken-burns")
+
+    modes = sub.add_parser("video-modes", help="list all 100% free video generation modes")
 
     trends = sub.add_parser("trends", help="discover and score video ideas for a niche")
     trends.add_argument("--niche", required=True)
@@ -92,8 +96,10 @@ def main() -> None:
         path = EpisodePipeline().create(args.topic, args.episode_id)
         print(f"Created {path}")
     elif args.command == "run":
-        path = build_video(args.topic, args.runtime_dir, args.episode_id)
+        path = build_video(args.topic, args.runtime_dir, args.episode_id, video_mode=args.video_mode)
         print(f"Created {path}")
+    elif args.command == "video-modes":
+        print(json.dumps({"free_video_modes": list(FREE_VIDEO_MODES)}, indent=2))
     elif args.command == "trends":
         path = discover_trends(args.niche, args.runtime_dir, feeds=args.feeds, searxng_url=args.searxng_url)
         print(f"Created {path}")
