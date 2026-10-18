@@ -19,7 +19,7 @@ def _escape(value: str) -> str:
 
 
 def _svg(title: str, variant: str, accent: str) -> str:
-    words = re.findall(r"\\S+", title)
+    words = re.findall(r"\S+", title)
     lines = [" ".join(words[i:i + 4]) for i in range(0, len(words), 4)] or [title]
     text = "".join(
         f'<text x="80" y="{210 + i * 72}" class="headline">{_escape(line)}</text>'
