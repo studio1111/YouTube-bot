@@ -22,27 +22,43 @@ class WinnerResult:
     winner: str | None
     reason: str
     metrics: list[VariantMetrics]
+    warnings: list[str]
 
 
-def calculate_winner(metrics: list[VariantMetrics], min_impressions: int = 100) -> WinnerResult:
+def calculate_winner(
+    metrics: list[VariantMetrics],
+    min_impressions: int = 100,
+    expected_variant_ids: list[str] | None = None,
+) -> WinnerResult:
+    warnings: list[str] = []
+    if expected_variant_ids:
+        present = {item.variant_id for item in metrics}
+        missing = [item for item in expected_variant_ids if item not in present]
+        if missing:
+            warnings.append(f"Missing Analytics rows for variants: {', '.join(missing)}.")
+    invalid = [item.variant_id for item in metrics if item.impressions < 0 or item.views < 0 or not 0 <= item.ctr <= 1]
+    if invalid:
+        warnings.append(f"Invalid metric values for variants: {', '.join(invalid)}.")
     if len(metrics) < 2:
-        return WinnerResult("insufficient_data", None, "At least two variants are required.", metrics)
+        warnings.append("Analytics returned fewer than two usable variant rows.")
+        return WinnerResult("insufficient_data", None, "At least two variants are required.", metrics, warnings)
     if any(item.impressions < min_impressions for item in metrics):
+        warnings.append(f"At least one variant is below the {min_impressions}-impression minimum.")
         return WinnerResult(
             "insufficient_data", None,
-            f"Each variant needs at least {min_impressions} impressions.", metrics,
+            f"Each variant needs at least {min_impressions} impressions.", metrics, warnings,
         )
+    if invalid:
+        return WinnerResult("insufficient_data", None, "Invalid metrics cannot produce a winner.", metrics, warnings)
     ordered = sorted(metrics, key=lambda item: (item.ctr, item.impressions), reverse=True)
     if ordered[0].ctr == ordered[1].ctr:
-        return WinnerResult("tie", None, "The top variants have identical CTR.", metrics)
-    return WinnerResult("winner_found", ordered[0].variant_id, "Highest CTR after minimum sample.", metrics)
+        warnings.append("The top variants have identical CTR; no winner was selected.")
+        return WinnerResult("tie", None, "The top variants have identical CTR.", metrics, warnings)
+    return WinnerResult("winner_found", ordered[0].variant_id, "Highest CTR after minimum sample.", metrics, warnings)
 
 
 def _extract_rows(payload: dict[str, Any], variant_ids: list[str]) -> list[VariantMetrics]:
     rows = payload.get("rows", [])
-    # The API does not attribute impressions to thumbnail variants. This adapter
-    # expects a dimension named variant, supplied by an approved experiment proxy
-    # or an exported experiment-level report.
     result: list[VariantMetrics] = []
     for row in rows:
         values = row if isinstance(row, list) else row.get("values", [])
@@ -51,7 +67,10 @@ def _extract_rows(payload: dict[str, Any], variant_ids: list[str]) -> list[Varia
         variant, impressions, views, ctr = values[:4]
         if variant not in variant_ids:
             continue
-        result.append(VariantMetrics(variant, int(impressions), int(views), float(ctr)))
+        try:
+            result.append(VariantMetrics(variant, int(impressions), int(views), float(ctr)))
+        except (TypeError, ValueError):
+            continue
     return result
 
 
@@ -100,9 +119,11 @@ class YouTubeAnalyticsClient:
 def snapshot_experiment(experiment_file: str, metrics: list[VariantMetrics], output_file: str | None = None) -> Path:
     path = Path(experiment_file)
     data = json.loads(path.read_text(encoding="utf-8"))
-    result = calculate_winner(metrics)
+    expected = [item["id"] for item in data.get("variants", [])]
+    result = calculate_winner(metrics, expected_variant_ids=expected)
     data["analytics"] = {
         "metrics": [item.__dict__ for item in metrics],
+        "warnings": result.warnings,
         "result": {
             "status": result.status,
             "winner": result.winner,
