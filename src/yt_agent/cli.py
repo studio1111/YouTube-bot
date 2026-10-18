@@ -1,5 +1,7 @@
 import argparse
+import json
 from .ab_test import create_experiment
+from .analytics import VariantMetrics, YouTubeAnalyticsClient, date_window, snapshot_experiment
 from .pipeline import EpisodePipeline
 from .vertical_slice import build_video
 
@@ -18,6 +20,12 @@ def main() -> None:
     ab.add_argument("--topic", required=True)
     ab.add_argument("--experiment-id", default="exp-001")
     ab.add_argument("--runtime-dir", default="runtime")
+    analytics = sub.add_parser("analytics", help="query Analytics and calculate a winner")
+    analytics.add_argument("--experiment-file", required=True)
+    analytics.add_argument("--start-date")
+    analytics.add_argument("--end-date")
+    analytics.add_argument("--credentials-file")
+    analytics.add_argument("--token-file", default="runtime/youtube-token.json")
     args = parser.parse_args()
     if args.command == "demo":
         path = EpisodePipeline().create(args.topic, args.episode_id)
@@ -28,7 +36,12 @@ def main() -> None:
     elif args.command == "ab-test":
         path = create_experiment(args.topic, args.runtime_dir, args.experiment_id)
         print(f"Created {path}")
-
-
-if __name__ == "__main__":
-    main()
+    elif args.command == "analytics":
+        data = json.loads(open(args.experiment_file, encoding="utf-8").read())
+        ids = [item["id"] for item in data["variants"]]
+        start, end = args.start_date, args.end_date
+        if not start or not end:
+            start, end = date_window()
+        metrics = YouTubeAnalyticsClient(args.credentials_file, args.token_file).query_variant_report(start, end, ids)
+        path = snapshot_experiment(args.experiment_file, metrics)
+        print(f"Updated {path}")
