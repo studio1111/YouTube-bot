@@ -5,9 +5,11 @@ import shutil
 import subprocess
 import textwrap
 from pathlib import Path
-from typing import Iterable
 
 from .models import EpisodeManifest, EpisodeState, Source
+from .qa import evaluate_episode_qa
+from .seo import write_seo_package
+from .subtitles import write_subtitles
 
 
 DEFAULT_IDEA = {
@@ -55,17 +57,14 @@ def _ppm_slide(path: Path, heading: str, body: str, index: int, total: int) -> N
     pixels = bytearray()
     for y in range(height):
         for x in range(width):
-            # dark navy gradient, no external fonts/assets required
             t = y / height
             pixels.extend((int(10 + 18 * t), int(20 + 25 * t), int(48 + 45 * t)))
-    # A simple accent bar makes each frame readable even without fonts.
     for y in range(48, 62):
         for x in range(70, width - 70):
             pos = (x - 70) / (width - 140)
             pixels[y * width * 3 + x * 3 : y * width * 3 + x * 3 + 3] = bytes(
                 (52, int(180 - 80 * pos), 220)
             )
-    # PPM is intentionally image-only; drawtext is delegated to ffmpeg when available.
     path.write_bytes(f"P6\n{width} {height}\n255\n".encode() + pixels)
 
 
@@ -80,14 +79,24 @@ def _run_ffmpeg(frames: Path, output: Path, fps: int, title: str) -> bool:
         "fontcolor=white:fontsize=42:x=70:y=100,"
         "drawtext=text='Vertical slice':fontcolor=0x9bdcff:fontsize=24:x=70:y=650"
     )
-    subprocess.run(
+    proc = subprocess.run(
         [ffmpeg, "-y", "-framerate", str(fps), "-i", pattern, "-vf", vf,
          "-c:v", "libx264", "-pix_fmt", "yuv420p", str(output)],
-        check=True,
+        check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         text=True,
     )
+    if proc.returncode != 0:
+        proc2 = subprocess.run(
+            [ffmpeg, "-y", "-framerate", str(fps), "-i", pattern,
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", str(output)],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return proc2.returncode == 0
     return True
 
 
@@ -96,14 +105,16 @@ def build_video(topic: str | None = None, runtime_dir: str = "runtime", episode_
     frames = root / "frames"
     frames.mkdir(parents=True, exist_ok=True)
     idea = generate_idea(topic)
-    write_script(idea, root / "script.txt")
+    script_path = write_script(idea, root / "script.txt")
+    script_text = script_path.read_text(encoding="utf-8")
+    srt_path, vtt_path = write_subtitles(root, script_text)
+    seo_path = write_seo_package(root, idea["title"], script_text, sources=["local://generated"])
     slides = [idea["hook"], *idea["beats"], idea["close"]]
     for i, text in enumerate(slides, 1):
         _ppm_slide(frames / f"slide-{i:03d}.ppm", idea["title"], text, i, len(slides))
     output = root / "video.mp4"
     rendered = _run_ffmpeg(frames, output, fps=1, title=idea["title"])
     if not rendered:
-        # Still return a useful local artifact when FFmpeg is not installed.
         output = root / "video-not-rendered.txt"
         output.write_text("Install FFmpeg and rerun to create video.mp4.\n", encoding="utf-8")
     manifest = EpisodeManifest(
@@ -111,9 +122,17 @@ def build_video(topic: str | None = None, runtime_dir: str = "runtime", episode_
         topic=idea["title"],
         state=EpisodeState.RENDERED if rendered else EpisodeState.ASSET_PRODUCTION,
         sources=[Source(url="local://generated", title="Deterministic local starter idea", license="project")],
-        artifacts={"script": "script.txt", "video": output.name, "frames": "frames/"},
+        artifacts={
+            "script": "script.txt",
+            "subtitles_srt": srt_path.name,
+            "subtitles_vtt": vtt_path.name,
+            "seo": seo_path.name,
+            "video": output.name,
+            "frames": "frames/",
+        },
     )
     (root / "manifest.json").write_text(
         json.dumps(manifest.model_dump(mode="json"), indent=2), encoding="utf-8"
     )
+    evaluate_episode_qa(root)
     return output
