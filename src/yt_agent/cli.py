@@ -7,9 +7,11 @@ from .analytics import YouTubeAnalyticsClient, date_window, snapshot_experiment
 from .autopilot import run_autopilot
 from .branding import build_brand_kit
 from .content_calendar import write_calendar
+from .health import write_health_report
 from .idea_intelligence import build_idea_report
 from .notifications import send_alerts
 from .pipeline import EpisodePipeline
+from .provenance import write_provenance
 from .publisher import prepare_publish_package
 from .qa import evaluate_episode_qa
 from .scenario_prompts import write_scenario
@@ -30,6 +32,10 @@ def main() -> None:
     scenario.add_argument("--idea-file", required=True); scenario.add_argument("--runtime-dir", default="runtime"); scenario.add_argument("--audience", default="curious science and technology viewers"); scenario.add_argument("--format", default="long-form")
     calendar = sub.add_parser("calendar", help="turn an idea report into a publishing calendar")
     calendar.add_argument("--ideas-file", required=True); calendar.add_argument("--start-date", required=True); calendar.add_argument("--runtime-dir", default="runtime"); calendar.add_argument("--weeks", type=int, default=4)
+    health = sub.add_parser("health", help="check local tools and configured integrations")
+    health.add_argument("--runtime-dir", default="runtime")
+    provenance = sub.add_parser("provenance", help="hash every episode artifact into a provenance ledger")
+    provenance.add_argument("--episode-dir", required=True)
     auto = sub.add_parser("autopilot", help="run complete pipeline: trends -> branding -> video -> A/B -> QA -> publish prep")
     auto.add_argument("--niche", required=True); auto.add_argument("--channel-name", default="Deep Cosmos"); auto.add_argument("--episode-id", default="ep-auto-001"); auto.add_argument("--runtime-dir", default="runtime"); auto.add_argument("--approved-by"); auto.add_argument("--publish-at")
     demo = sub.add_parser("demo", help="create a local episode manifest"); demo.add_argument("--topic", required=True); demo.add_argument("--episode-id", default="episode-001")
@@ -50,6 +56,8 @@ def main() -> None:
     elif args.command == "scenario":
         idea=json.loads(Path(args.idea_file).read_text(encoding='utf-8')); print(f"Created {write_scenario(idea, args.runtime_dir, args.audience, args.format)}")
     elif args.command == "calendar": print(f"Created {write_calendar(args.ideas_file, args.start_date, args.runtime_dir, args.weeks)}")
+    elif args.command == "health": print(f"Created {write_health_report(args.runtime_dir)}")
+    elif args.command == "provenance": print(f"Created {write_provenance(args.episode_dir)}")
     elif args.command == "autopilot": print(f"Created {run_autopilot(args.niche, channel_name=args.channel_name, episode_id=args.episode_id, runtime_dir=args.runtime_dir, approved_by=args.approved_by, publish_at=args.publish_at)}")
     elif args.command == "demo": print(f"Created {EpisodePipeline().create(args.topic, args.episode_id)}")
     elif args.command == "run": print(f"Created {build_video(args.topic, args.runtime_dir, args.episode_id, video_mode=args.video_mode)}")
