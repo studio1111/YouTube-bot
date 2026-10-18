@@ -1,0 +1,22 @@
+{
+  "channel": "Deep Cosmos",
+  "default_video_mode": "slides",
+  "timezone": "UTC",
+  "upload": {
+    "privacy_status": "private",
+    "private_first": true,
+    "public_release_requires_studio": true
+  },
+  "limits": {
+    "max_episode_cost_usd": 5.0,
+    "max_retries": 3,
+    "max_render_seconds": 900
+  },
+  "compliance": {
+    "provenance_required": true,
+    "rights_ledger_required": true,
+    "synthetic_media_review_required": true,
+    "human_script_approval": true,
+    "human_publish_approval": true
+  }
+}
