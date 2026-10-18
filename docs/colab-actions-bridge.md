@@ -1,22 +1,29 @@
 # Colab and GitHub Actions benchmark bridge
 
-`colab/yt_agent_hardware_benchmark.ipynb` runs the same portable benchmark on a temporary Colab CPU/GPU runtime. `scripts/benchmark.py` writes the `yt-agent.render-benchmark.v1` JSON schema with mode timings, output size, FFmpeg/Python/platform details, and GPU detection.
+## Fastest phone-only path
 
-## Colab
+Open this notebook directly in Google Colab:
 
-1. Open the notebook in Colab.
-2. Choose Runtime → Change runtime type → T4 GPU if available.
-3. Run all cells and download `render-benchmark.json`.
-4. Review it, then commit it as `runtime/benchmarks/colab-YYYYMMDD.json` or attach it to a GitHub Issue.
+[**Open the mobile benchmark in Colab**](https://colab.research.google.com/github/studio1111/YouTube-bot/blob/main/colab/yt_agent_mobile_benchmark.ipynb)
 
-The current `comfyui-workflow` mode exports a workflow and measures the local fallback renderer; it does not claim actual Wan2.1/FLUX inference. A true model benchmark must record checkpoint hash, VRAM, resolution, frame count, seed, and inference time separately.
+On Android or iPhone:
+
+1. Tap the link.
+2. Sign in to Google if asked.
+3. Open the **Runtime** menu and tap **Run all**.
+4. Wait for the file `mobile-render-benchmark.json` to download.
+5. Send that JSON here for comparison, or use the optional Drive backup cell.
+
+No local computer, terminal, API key, GitHub token, YouTube OAuth, Telegram credential, or SMTP password is needed. Keep the optional Drive cell off unless you want a backup.
+
+## What it measures
+
+The report records mode timings, output size, FFmpeg/Python/platform details, and whether `nvidia-smi` sees a GPU. It benchmarks the repository's six render paths. The `comfyui-workflow` mode exports a workflow and measures the local fallback renderer; it does not claim Wan2.1/FLUX inference.
+
+## More accurate results
+
+Set `REPEATS = 3` in the second cell when you have time. The default `REPEATS = 1` is intentionally phone-friendly and faster. Compare Colab CPU, Colab T4, and GitHub Actions CPU as separate hardware classes.
 
 ## GitHub Actions
 
-The workflow file cannot be added with the current GitHub connection because creating `.github/workflows/*` requires the repository's **Workflow** permission. Once that scope is enabled, add a workflow that runs `python scripts/benchmark.py` on `ubuntu-latest`, uploads `render-benchmark.json` with `actions/upload-artifact@v4`, and keeps it explicitly labeled CPU-only.
-
-## Safe comparison
-
-Only compare reports with the same topic, script, narration, scene count, FFmpeg version, resolution, frame rate, repeats, and mode. Label reports `colab-cpu`, `colab-t4`, or `github-actions-ubuntu-cpu`; never merge hardware results into one average.
-
-Never commit YouTube OAuth files, Telegram tokens, SMTP passwords, or notebook outputs containing secrets.
+The existing GitHub Actions bridge still needs the repository's **Workflow** permission before `.github/workflows/*` can be added. Colab does not require that permission and is the easiest route from a phone.
