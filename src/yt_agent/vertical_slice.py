@@ -6,6 +6,7 @@ import subprocess
 import textwrap
 from pathlib import Path
 
+from .audio import generate_narration_wav
 from .models import EpisodeManifest, EpisodeState, Source
 from .qa import evaluate_episode_qa
 from .seo import write_seo_package
@@ -68,7 +69,7 @@ def _ppm_slide(path: Path, heading: str, body: str, index: int, total: int) -> N
     path.write_bytes(f"P6\n{width} {height}\n255\n".encode() + pixels)
 
 
-def _run_ffmpeg(frames: Path, output: Path, fps: int, title: str) -> bool:
+def _run_ffmpeg(frames: Path, audio_wav: Path, output: Path, fps: int, title: str) -> bool:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         return False
@@ -80,8 +81,8 @@ def _run_ffmpeg(frames: Path, output: Path, fps: int, title: str) -> bool:
         "drawtext=text='Vertical slice':fontcolor=0x9bdcff:fontsize=24:x=70:y=650"
     )
     proc = subprocess.run(
-        [ffmpeg, "-y", "-framerate", str(fps), "-i", pattern, "-vf", vf,
-         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(output)],
+        [ffmpeg, "-y", "-framerate", str(fps), "-i", pattern, "-i", str(audio_wav), "-vf", vf,
+         "-c:v", "libx264", "-c:a", "aac", "-shortest", "-pix_fmt", "yuv420p", str(output)],
         check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -89,8 +90,8 @@ def _run_ffmpeg(frames: Path, output: Path, fps: int, title: str) -> bool:
     )
     if proc.returncode != 0:
         proc2 = subprocess.run(
-            [ffmpeg, "-y", "-framerate", str(fps), "-i", pattern,
-             "-c:v", "libx264", "-pix_fmt", "yuv420p", str(output)],
+            [ffmpeg, "-y", "-framerate", str(fps), "-i", pattern, "-i", str(audio_wav),
+             "-c:v", "libx264", "-c:a", "aac", "-shortest", "-pix_fmt", "yuv420p", str(output)],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -112,8 +113,9 @@ def build_video(topic: str | None = None, runtime_dir: str = "runtime", episode_
     slides = [idea["hook"], *idea["beats"], idea["close"]]
     for i, text in enumerate(slides, 1):
         _ppm_slide(frames / f"slide-{i:03d}.ppm", idea["title"], text, i, len(slides))
+    audio_wav = generate_narration_wav(script_text, root / "narration.wav", duration_sec=float(len(slides)))
     output = root / "video.mp4"
-    rendered = _run_ffmpeg(frames, output, fps=1, title=idea["title"])
+    rendered = _run_ffmpeg(frames, audio_wav, output, fps=1, title=idea["title"])
     if not rendered:
         output = root / "video-not-rendered.txt"
         output.write_text("Install FFmpeg and rerun to create video.mp4.\n", encoding="utf-8")
@@ -124,6 +126,7 @@ def build_video(topic: str | None = None, runtime_dir: str = "runtime", episode_
         sources=[Source(url="local://generated", title="Deterministic local starter idea", license="project")],
         artifacts={
             "script": "script.txt",
+            "audio": audio_wav.name,
             "subtitles_srt": srt_path.name,
             "subtitles_vtt": vtt_path.name,
             "seo": seo_path.name,

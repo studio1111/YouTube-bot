@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .ab_test import create_experiment
 from .analytics import YouTubeAnalyticsClient, date_window, snapshot_experiment
+from .autopilot import run_autopilot
 from .branding import build_brand_kit
 from .notifications import send_alerts
 from .pipeline import EpisodePipeline
@@ -19,11 +20,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Autonomous local-first YouTube channel agent")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    auto = sub.add_parser("autopilot", help="run complete pipeline: trends -> branding -> video -> A/B -> QA -> publish prep")
+    auto.add_argument("--niche", required=True)
+    auto.add_argument("--channel-name", default="Deep Cosmos")
+    auto.add_argument("--episode-id", default="ep-auto-001")
+    auto.add_argument("--runtime-dir", default="runtime")
+    auto.add_argument("--approved-by")
+    auto.add_argument("--publish-at")
+
     demo = sub.add_parser("demo", help="create a local episode manifest")
     demo.add_argument("--topic", required=True)
     demo.add_argument("--episode-id", default="episode-001")
 
-    run = sub.add_parser("run", help="generate script, subtitles, SEO, slides, QA, and MP4")
+    run = sub.add_parser("run", help="generate script, audio, subtitles, SEO, slides, QA, and MP4")
     run.add_argument("--topic")
     run.add_argument("--episode-id", default="episode-001")
     run.add_argument("--runtime-dir", default="runtime")
@@ -69,7 +78,17 @@ def main() -> None:
     analytics.add_argument("--notify", nargs="*", choices=["telegram", "email"])
 
     args = parser.parse_args()
-    if args.command == "demo":
+    if args.command == "autopilot":
+        path = run_autopilot(
+            args.niche,
+            channel_name=args.channel_name,
+            episode_id=args.episode_id,
+            runtime_dir=args.runtime_dir,
+            approved_by=args.approved_by,
+            publish_at=args.publish_at,
+        )
+        print(f"Created {path}")
+    elif args.command == "demo":
         path = EpisodePipeline().create(args.topic, args.episode_id)
         print(f"Created {path}")
     elif args.command == "run":
