@@ -1,7 +1,7 @@
 import argparse
 import json
 from .ab_test import create_experiment
-from .analytics import VariantMetrics, YouTubeAnalyticsClient, date_window, snapshot_experiment
+from .analytics import YouTubeAnalyticsClient, date_window, snapshot_experiment
 from .pipeline import EpisodePipeline
 from .vertical_slice import build_video
 
@@ -44,4 +44,7 @@ def main() -> None:
             start, end = date_window()
         metrics = YouTubeAnalyticsClient(args.credentials_file, args.token_file).query_variant_report(start, end, ids)
         path = snapshot_experiment(args.experiment_file, metrics)
+        result = json.loads(path.read_text(encoding="utf-8")).get("analytics", {})
         print(f"Updated {path}")
+        for warning in result.get("warnings", []):
+            print(f"ALERT: {warning}")
