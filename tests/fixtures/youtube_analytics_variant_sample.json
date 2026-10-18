@@ -1,0 +1,13 @@
+{
+  "kind": "youtubeAnalytics#resultTable",
+  "columnHeaders": [
+    {"name": "variant", "columnType": "DIMENSION", "dataType": "STRING"},
+    {"name": "impressions", "columnType": "METRIC", "dataType": "INTEGER"},
+    {"name": "views", "columnType": "METRIC", "dataType": "INTEGER"},
+    {"name": "impressionsClickThroughRate", "columnType": "METRIC", "dataType": "FLOAT"}
+  ],
+  "rows": [
+    ["A", "1250", "138", "0.1104"],
+    ["B", "1190", "112", "0.0941"]
+  ]
+}
