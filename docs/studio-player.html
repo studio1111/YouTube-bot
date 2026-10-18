@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Cosmos — پخش‌کننده و ضبط‌کننده مستند علمی فارسی</title>
+<style>
+  :root { --bg:#0B0F1A; --panel:#131B2E; --line:#263554; --lime:#C3FF64; --cyan:#5AD2FF; --text:#F5F8FF; --muted:#B8C7E0; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif; padding:18px; }
+  .wrap { max-width:980px; margin:0 auto; }
+  .top { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:16px; font-family:monospace; color:var(--cyan); font-size:13px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  canvas { width:100%; height:auto; border-radius:12px; background:#000; display:block; }
+  .controls { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  button, a.btn { border:none; border-radius:999px; padding:12px 18px; font-size:14px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-block; }
+  .btn-lime { background:var(--lime); color:#0B0F1A; }
+  .btn-cyan { background:#1B2B4B; color:var(--text); border:1px solid var(--cyan); }
+  .scenes { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; margin-top:16px; }
+  .sc { background:#0D1424; border:1px solid var(--line); border-radius:12px; padding:12px; cursor:pointer; }
+  .sc.active { border-color:var(--lime); background:#17233D; }
+  .sc small { color:var(--cyan); font-family:monospace; display:block; margin-bottom:4px; }
+  .sc b { display:block; font-size:14px; margin-bottom:4px; }
+  .sc span { font-size:12px; color:var(--muted); line-height:1.5; display:block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <span>DEEP COSMOS // PERSIAN SCIENCE DOCUMENTARY PLAYER</span>
+    <span id="tc">SCENE 01 · 00:00 / 00:24</span>
+  </div>
+  <div class="card">
+    <canvas id="stage" width="1280" height="720"></canvas>
+    <div class="controls">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-lime" id="playBtn">🔊 پخش مستند با صدا و موسیقی</button>
+        <button class="btn-cyan" id="recBtn">⏺ ضبط و دانلود مستقیم فایل ویدیو (WebM/MP4)</button>
+      </div>
+      <a class="btn btn-cyan" href="https://colab.research.google.com/github/studio1111/YouTube-bot/blob/main/colab/yt_agent_mobile_video_creator_final.ipynb" target="_blank">🚀 رندر نسخه MP4 با صدای Neural در Colab</a>
+    </div>
+    <div class="scenes" id="sceneGrid"></div>
+  </div>
+</div>
+<script>
+const SCENES = [
+  { code:"01 / ORBITAL HOOK", tag:"ATMOSPHERIC OPTICS · 380–750 nm", title:"چرا آسمان زمین آبی دیده می‌شود؟", caption:"آسمان به خاطر اقیانوس‌ها آبی نیست؛ راز اصلی در برخورد نور خورشید با مولکول‌های هواست." },
+  { code:"02 / SOLAR SPECTRUM", tag:"WHITE LIGHT DISPERSION · PRISM", title:"نور سفید خورشید، ترکیبی از تمام رنگ‌هاست", caption:"نور آبی موج‌های کوتاه و پرانرژی (۴۰۰ نانومتر) دارد، اما نور قرمز موج‌های بلند (۷۰۰ نانومتر) دارد." },
+  { code:"03 / RAYLEIGH SCATTERING", tag:"N2 & O2 MOLECULAR SCATTERING", title:"پراکندگی رایلی در برخورد با نیتروژن و اکسیژن", caption:"مولکول‌های ریز هوا نور آبی را تا ۱۰ برابر بیشتر از نور قرمز به تمام جهت‌ها پخش می‌کنند." },
+  { code:"04 / SUNSET GEOMETRY", tag:"LOW-ANGLE SOLAR PATH · 10X AIR MASS", title:"چرا هنگام غروب، آسمان سرخ و طلایی می‌شود؟", caption:"در افق، نور خورشید مسیر بسیار طولانی‌تری در جو طی می‌کند؛ آبی حذف می‌شود و سرخ می‌ماند." }
+];
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const duration = 24;
+let elapsed = 0, playing = true, last = performance.now(), audioCtx = null;
+
+const grid = document.getElementById("sceneGrid");
+SCENES.forEach((s, i) => {
+  const d = document.createElement("div");
+  d.className = "sc";
+  d.innerHTML = `<small>${s.code}</small><b>${s.title}</b><span>${s.caption}</span>`;
+  d.onclick = () => { elapsed = i * 6 + 0.05; speakScene(i); };
+  grid.appendChild(d);
+});
+
+function speakScene(idx) {
+  if (!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(SCENES[idx].title + ". " + SCENES[idx].caption);
+  u.lang = "fa-IR";
+  u.rate = 0.95;
+  window.speechSynthesis.speak(u);
+}
+
+function startAmbientSound() {
+  if (audioCtx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audioCtx = new AC();
+  [110, 164.81, 220].forEach((freq) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.value = 0.03;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+  });
+}
+
+document.getElementById("playBtn").onclick = () => {
+  startAmbientSound();
+  playing = true;
+  speakScene(Math.min(3, Math.floor((elapsed / duration) * 4)));
+};
+
+document.getElementById("recBtn").onclick = () => {
+  startAmbientSound();
+  elapsed = 0;
+  playing = true;
+  const stream = canvas.captureStream(24);
+  const rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm" });
+  const chunks = [];
+  const btn = document.getElementById("recBtn");
+  btn.textContent = "⏳ در حال ضبط ۲۴ ثانیه مستند...";
+  rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+  rec.onstop = () => {
+    const blob = new Blob(chunks, { type: "video/webm" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "deep-cosmos-documentary.webm";
+    a.click();
+    btn.textContent = "✅ ویدیو دانلود شد (ضبط مجدد)";
+  };
+  rec.start();
+  setTimeout(() => { if (rec.state === "recording") rec.stop(); }, 24000);
+};
+
+function render(now) {
+  const dt = (now - last) / 1000;
+  last = now;
+  if (playing) elapsed = (elapsed + dt) % duration;
+  const t = elapsed;
+  const sIdx = Math.min(3, Math.floor((t / duration) * 4));
+  const sc = SCENES[sIdx];
+  document.getElementById("tc").textContent = `${sc.code} · 00:${String(Math.floor(t)).padStart(2,"0")} / 00:24`;
+  Array.from(grid.children).forEach((el, i) => el.classList.toggle("active", i === sIdx));
+
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (sIdx === 0) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#050A19"); g.addColorStop(1, "#0E2652");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const sx = 240 + 25 * Math.sin(t * 0.8), sy = 180;
+    const sg = ctx.createRadialGradient(sx, sy, 10, sx, sy, 190);
+    sg.addColorStop(0, "#FFF9D2"); sg.addColorStop(0.5, "rgba(255,200,90,0.45)"); sg.addColorStop(1, "rgba(255,200,90,0)");
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx, sy, 190, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#48C8FF"; ctx.lineWidth = 18;
+    ctx.beginPath(); ctx.arc(W * 0.58, H + 420, 680, Math.PI * 1.12, Math.PI * 1.88); ctx.stroke();
+    ctx.fillStyle = "#081C3E"; ctx.beginPath(); ctx.arc(W * 0.58, H + 420, 668, 0, Math.PI * 2); ctx.fill();
+  } else if (sIdx === 1) {
+    ctx.fillStyle = "#090F21"; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.moveTo(90, 390); ctx.lineTo(520, 355); ctx.stroke();
+    ctx.fillStyle = "rgba(40,82,138,0.65)"; ctx.strokeStyle = "#9EE6FF"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(470, 445); ctx.lineTo(565, 235); ctx.lineTo(660, 445); ctx.closePath(); ctx.fill(); ctx.stroke();
+    [["#FF4B4B",-65,0.035,"700nm RED"],["#FFA033",-40,0.045,"620nm ORANGE"],["#FFE148",-15,0.055,"580nm YELLOW"],["#48E582",12,0.07,"530nm GREEN"],["#3CB4FF",42,0.115,"470nm BLUE"],["#A864FF",72,0.145,"400nm VIOLET"]].forEach(([col,yOff,freq,lbl]) => {
+      ctx.strokeStyle = col; ctx.lineWidth = 6; ctx.beginPath();
+      for (let x = 0; x <= 540; x += 8) {
+        const px = 610 + x, py = 355 + (yOff * x) / 520 + 9 * Math.sin(x * freq - t * 9);
+        if (x === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.fillStyle = col; ctx.font = "700 15px monospace"; ctx.fillText(lbl, 1020, 355 + yOff);
+    });
+  } else if (sIdx === 2) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#15549A"); g.addColorStop(1, "#0B244E");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (let m = 0; m < 18; m++) {
+      const mx = 140 + ((m * 185) % 980), my = 175 + Math.floor(m / 6) * 125 + 10 * Math.sin(t * 2 + m);
+      const pulse = 16 + ((t * 34 + m * 11) % 38);
+      ctx.strokeStyle = "rgba(135,225,255,0.7)"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(mx, my, pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "#EBF8FF"; ctx.beginPath(); ctx.arc(mx, my, 8, 0, Math.PI * 2); ctx.fill();
+    }
+  } else {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#1E1436"); g.addColorStop(0.55, "#A8333B"); g.addColorStop(1, "#F39C3D");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#FFD166"; ctx.beginPath(); ctx.arc(320, 435, 92, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#120D1D"; ctx.fillRect(0, 510, W, H - 510);
+  }
+
+  ctx.fillStyle = "rgba(8,14,28,0.9)"; ctx.fillRect(48, 28, W - 96, 58);
+  ctx.fillStyle = "#C3FF64"; ctx.font = "700 16px monospace"; ctx.textAlign = "left";
+  ctx.fillText(`DEEP COSMOS // ${sc.code} · ${sc.tag}`, 72, 63);
+
+  ctx.fillStyle = "rgba(7,12,24,0.92)"; ctx.fillRect(68, H - 142, W - 136, 104);
+  ctx.fillStyle = "#FFFFFF"; ctx.font = "700 28px system-ui, sans-serif"; ctx.textAlign = "center";
+  ctx.fillText(sc.title, W / 2, H - 96);
+  ctx.fillStyle = "#B8DCFF"; ctx.font = "400 21px system-ui, sans-serif";
+  ctx.fillText(sc.caption, W / 2, H - 58);
+  ctx.fillStyle = "#C3FF64"; ctx.fillRect(68, H - 42, ((W - 136) * t) / duration, 5);
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
