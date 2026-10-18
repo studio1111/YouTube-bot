@@ -26,13 +26,11 @@ shutil.rmtree(work, ignore_errors=True)
 frames_dir = work / "frames"
 frames_dir.mkdir(parents=True, exist_ok=True)
 
-# Use 1280x720 HD at 20 fps for crisp visuals and fast, compact MP4 delivery
 W, H = 1280, 720
 FPS = 20
 DURATION = 24
 TOTAL_FRAMES = DURATION * FPS
 
-# Separate Persian and Latin fonts so neither ever renders boxes!
 fa_reg_path = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf"
 fa_bold_path = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"
 en_reg_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -234,3 +232,121 @@ def draw_hud_and_captions(img: Image.Image, draw: ImageDraw.ImageDraw, t: float)
     prog_w = int((W - 160) * (t / DURATION))
     draw.rounded_rectangle((80, H - 52, W - 80, H - 44), radius=4, fill=(32, 46, 72))
     draw.rounded_rectangle((80, H - 52, 80 + max(8, prog_w), H - 44), radius=4, fill=(195, 255, 100))
+
+
+for frame_idx in range(TOTAL_FRAMES):
+    t = frame_idx / FPS
+    scene_len = DURATION / len(SCENES)
+    s_idx = min(len(SCENES) - 1, int(t / scene_len))
+    local_t = (t % scene_len) / scene_len
+
+    img = Image.new("RGB", (W, H), (8, 14, 28))
+    draw = ImageDraw.Draw(img)
+
+    if s_idx == 0:
+        scene_orbital_earth(img, draw, t, local_t)
+    elif s_idx == 1:
+        scene_prism_spectrum(img, draw, t, local_t)
+    elif s_idx == 2:
+        scene_rayleigh_molecules(img, draw, t, local_t)
+    else:
+        scene_sunset_geometry(img, draw, t, local_t)
+
+    draw_hud_and_captions(img, draw, t)
+    img.save(frames_dir / f"frame-{frame_idx:04d}.jpg", quality=90)
+
+script_lines = [sc["caption"] for sc in SCENES]
+script_text = "\n".join(script_lines)
+(work / "script-fa.txt").write_text(script_text + "\n", encoding="utf-8")
+
+voice_raw = work / "voice_raw.wav"
+espeak = shutil.which("espeak-ng") or shutil.which("espeak")
+if espeak:
+    subprocess.run(
+        [espeak, "-v", "fa", "-s", "138", "-w", str(voice_raw), " ... ".join(script_lines)],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+sr = 22050
+t_arr = np.linspace(0, DURATION, int(sr * DURATION), endpoint=False)
+pad = (
+    0.12 * np.sin(2 * np.pi * 110.0 * t_arr)
+    + 0.09 * np.sin(2 * np.pi * 164.81 * t_arr)
+    + 0.07 * np.sin(2 * np.pi * 220.0 * t_arr)
+    + 0.04 * np.sin(2 * np.pi * 277.18 * t_arr) * (0.5 + 0.5 * np.sin(2 * np.pi * 0.25 * t_arr))
+)
+pulse = 0.06 * np.sin(2 * np.pi * 55.0 * t_arr) * (np.sin(np.pi * t_arr / 2.0) ** 4)
+bed = np.clip(pad + pulse, -0.8, 0.8)
+bed_pcm = (bed * 32767).astype(np.int16)
+
+bed_wav = work / "ambient_bed.wav"
+with wave.open(str(bed_wav), "w") as wf:
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(sr)
+    wf.writeframes(bed_pcm.tobytes())
+
+mixed_audio = work / "narration.wav"
+if voice_raw.exists() and voice_raw.stat().st_size > 100:
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", str(voice_raw),
+            "-i", str(bed_wav),
+            "-filter_complex", "[0:a]volume=1.35,apad=whole_dur=24[v];[1:a]volume=0.38[b];[v][b]amix=inputs=2:duration=shortest",
+            "-t", str(DURATION),
+            str(mixed_audio),
+        ],
+        check=True,
+    )
+else:
+    shutil.copy2(bed_wav, mixed_audio)
+
+video_mp4 = work / "deep-cosmos-documentary.mp4"
+subprocess.run(
+    [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-framerate", str(FPS),
+        "-i", str(frames_dir / "frame-%04d.jpg"),
+        "-i", str(mixed_audio),
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "22",
+        "-c:a", "aac",
+        "-b:a", "160k",
+        "-shortest",
+        "-pix_fmt", "yuv420p",
+        str(video_mp4),
+    ],
+    check=True,
+)
+
+shutil.copy2(frames_dir / "frame-0015.jpg", work / "thumbnail.jpg")
+
+srt_blocks = []
+seg = DURATION / len(SCENES)
+for idx, sc in enumerate(SCENES, 1):
+    s0 = int((idx - 1) * seg)
+    s1 = int(idx * seg)
+    srt_blocks.append(f"{idx}\n00:00:{s0:02d},000 --> 00:00:{s1:02d},000\n{sc['caption']}\n")
+(work / "captions-fa.srt").write_text("\n".join(srt_blocks), encoding="utf-8")
+
+manifest = {
+    "title": "چرا آسمان زمین آبی دیده می‌شود؟ (مستند علمی کوتاه)",
+    "channel": "Deep Cosmos",
+    "duration_seconds": DURATION,
+    "resolution": f"{W}x{H}",
+    "fps": FPS,
+    "scenes": len(SCENES),
+    "audio": "Persian narration + ambient documentary synth bed",
+}
+(work / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+zip_out = work / "deep-cosmos-youtube-package.zip"
+with zipfile.ZipFile(zip_out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+    for fname in ["deep-cosmos-documentary.mp4", "thumbnail.jpg", "narration.wav", "script-fa.txt", "captions-fa.srt", "manifest.json"]:
+        zf.write(work / fname, arcname=fname)
+
+print("MP4 size:", video_mp4.stat().st_size, "ZIP size:", zip_out.stat().st_size)
